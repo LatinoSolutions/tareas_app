@@ -5,15 +5,15 @@ from typing import Dict, List
 import base64
 
 """
-Trading Tasks App – v1.2
-=======================
-➡️ Novedades
-------------
-* **Backup**: botón *Descargar backup* y opción *Cargar backup (.json)*.
-* **Miniaturas**: pre‑visualización de cada imagen a 660 px (configurable).
-* **Renombrar subpágina** (título editable).
-* **Valoración** con 0–5 ⭐ (estrellas unicode).
-* **Bug fix**: eliminado `st.experimental_rerun()` que generaba `AttributeError`.
+Trading Tasks App – v1.3 (estabilidad)
+======================================
+Corregido ▸ errores al crear subpáginas y renombrar tareas.
+Mejoras
+-------
+* **Callbacks seguros** para crear carpetas, subpáginas, imágenes.
+* **Renombrar**: campo texto + botón «Guardar título» (evita crash).
+* Uso de `st.rerun()` (estable) en vez de `st.experimental_rerun()`.
+* Keys de widgets únicas para sliders y textos.
 """
 
 DATA_FILE = Path("data.json")
@@ -21,7 +21,7 @@ DEFAULT_STATE_TAGS = ["Revisada", "No revisada", "Comentario pendiente"]
 STAR_RANGE = list(range(6))  # 0‑5 estrellas
 
 # ---------------------------------------------------------------------------
-# Utilidades de datos
+# Datos helpers
 # ---------------------------------------------------------------------------
 
 def load_data() -> Dict:
@@ -34,7 +34,7 @@ def save_data(data: Dict) -> None:
     DATA_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
 
 # ---------------------------------------------------------------------------
-# Session state defaults
+# Session defaults
 # ---------------------------------------------------------------------------
 
 def init_session_state():
@@ -44,53 +44,112 @@ def init_session_state():
         "new_folder": "",
         "new_task": "",
         "new_img": "",
-        "rename_task": "",
+        "rename_task_input": "",
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
 
 # ---------------------------------------------------------------------------
-# Sidebar controls
+# Callbacks
+# ---------------------------------------------------------------------------
+
+def add_folder_callback():
+    data = load_data()
+    name = st.session_state.new_folder.strip()
+    if not name:
+        st.sidebar.warning("Escribe un nombre primero")
+        return
+    if name in data:
+        st.sidebar.warning("La carpeta ya existe")
+        return
+    data[name] = {}
+    save_data(data)
+    st.session_state.new_folder = ""
+    st.sidebar.success("Carpeta creada ✔️")
+    st.rerun()
+
+
+def add_task_callback():
+    data = load_data()
+    folder = data[st.session_state.current_folder]
+    title = st.session_state.new_task.strip()
+    if not title:
+        st.warning("Nombre vacío")
+        return
+    if title in folder:
+        st.warning("La subpágina ya existe")
+        return
+    folder[title] = {"images": [], "comments": "", "tags": ["No revisada"], "stars": 0}
+    save_data(data)
+    st.session_state.new_task = ""
+    st.session_state.current_task = title
+    st.rerun()
+
+
+def add_image_callback():
+    data = load_data()
+    folder = data[st.session_state.current_folder]
+    task = folder[st.session_state.current_task]
+    url = st.session_state.new_img.strip()
+    if url:
+        task["images"].append(url)
+        save_data(data)
+        st.session_state.new_img = ""
+        st.rerun()
+    else:
+        st.warning("URL vacía")
+
+
+def rename_task_callback():
+    data = load_data()
+    folder = data[st.session_state.current_folder]
+    old_name = st.session_state.current_task
+    new_name = st.session_state.rename_task_input.strip()
+    if not new_name:
+        st.warning("Nombre vacío")
+        return
+    if new_name == old_name:
+        return
+    if new_name in folder:
+        st.warning("Ya existe una tarea con ese nombre")
+        return
+    folder[new_name] = folder.pop(old_name)
+    save_data(data)
+    st.session_state.current_task = new_name
+    st.session_state.rename_task_input = new_name
+    st.success("Título actualizado ✔️")
+    st.rerun()
+
+# ---------------------------------------------------------------------------
+# Sidebar (backup, creación y filtros)
 # ---------------------------------------------------------------------------
 
 def sidebar(data: Dict) -> List[str]:
     st.sidebar.title("☰ Menú & Filtros")
 
-    # -- Backup -----------------------------------------------------------
+    # Backup
     st.sidebar.markdown("### Backup")
     if st.sidebar.button("📥 Descargar backup"):
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         b64 = base64.b64encode(json_str.encode()).decode()
-        href = f'<a href="data:application/json;base64,{b64}" download="trading_tasks_backup.json">Bajar archivo</a>'
+        href = f'<a href="data:application/json;base64,{b64}" download="trading_tasks_backup.json">Descargar archivo</a>'
         st.sidebar.markdown(href, unsafe_allow_html=True)
 
-    uploaded = st.sidebar.file_uploader("📤 Cargar backup (.json)", type="json")
+    uploaded = st.sidebar.file_uploader("📤 Cargar backup", type="json")
     if uploaded:
         data.clear()
         data.update(json.load(uploaded))
         save_data(data)
         st.sidebar.success("Backup restaurado ✔️")
-        st.experimental_rerun()
+        st.rerun()
 
-    st.sidebar.markdown("---")
+    st.sidebar.divider()
 
-    # -- Nueva carpeta ----------------------------------------------------
+    # Nueva carpeta
     st.sidebar.text_input("Nueva carpeta", key="new_folder", placeholder="Ej: Semana 2")
-    if st.sidebar.button("➕ Crear carpeta", type="primary"):
-        name = st.session_state.new_folder.strip()
-        if name:
-            if name in data:
-                st.sidebar.warning("Ya existe esa carpeta")
-            else:
-                data[name] = {}
-                save_data(data)
-                st.sidebar.success("Carpeta creada")
-                st.session_state.new_folder = ""
-                st.experimental_rerun()
-        else:
-            st.sidebar.warning("Escribe un nombre primero")
+    st.sidebar.button("➕ Crear carpeta", on_click=add_folder_callback, type="primary")
 
-    # -- Filtros ----------------------------------------------------------
+    # Filtros
     all_tags = set(DEFAULT_STATE_TAGS)
     for folder in data.values():
         for task in folder.values():
@@ -98,7 +157,7 @@ def sidebar(data: Dict) -> List[str]:
     return st.sidebar.multiselect("Filtrar por etiquetas", sorted(all_tags))
 
 # ---------------------------------------------------------------------------
-# Main app
+# Main
 # ---------------------------------------------------------------------------
 
 def main():
@@ -106,10 +165,9 @@ def main():
     data = load_data()
 
     selected_tags = sidebar(data)
-
     st.title("📂 Tareas de Trading – Mentoría")
 
-    # ---------------- Carpeta raíz --------------------------------------
+    # --- Vista de carpetas ------------------------------------------------
     if st.session_state.current_folder is None:
         st.header("Carpetas")
         if not data:
@@ -117,37 +175,29 @@ def main():
         for name in data:
             st.button(
                 f"🗂️ {name}", key=f"folder_{name}",
-                on_click=lambda n=name: st.session_state.update({"current_folder": n})
+                on_click=lambda n=name: st.session_state.update({"current_folder": n, "current_task": None})
             )
         return
 
-    # ---------------- Dentro de carpeta ---------------------------------
+    # --- Dentro de carpeta ----------------------------------------------
     folder_name = st.session_state.current_folder
     folder = data[folder_name]
     st.header(f"📁 {folder_name}")
 
     if st.button("⬅️ Volver a carpetas"):
         st.session_state.update({"current_folder": None, "current_task": None})
-        return  # sin rerun
+        st.rerun()
 
-    # Crear subpágina (tarea específica)
+    # Crear subpágina
     st.text_input("Nueva subpágina", key="new_task", placeholder="Ej: Patrón BTC 4H")
-    if st.button("➕ Crear subpágina"):
-        title = st.session_state.new_task.strip()
-        if title and title not in folder:
-            folder[title] = {"images": [], "comments": "", "tags": ["No revisada"], "stars": 0}
-            save_data(data)
-            st.session_state.new_task = ""
-            st.experimental_rerun()
-        else:
-            st.warning("Nombre vacío o duplicado")
+    st.button("➕ Crear subpágina", on_click=add_task_callback)
 
-    # Filtrar
+    # Filtrar tareas por etiquetas
     task_items = folder.items()
     if selected_tags:
         task_items = [(k, v) for k, v in task_items if set(v.get("tags", [])) & set(selected_tags)]
 
-    # Listado de subpáginas ✅ miniatura
+    # Listado con miniatura
     for task_name, task_data in task_items:
         col1, col2 = st.columns([1, 5])
         with col1:
@@ -157,34 +207,32 @@ def main():
             tag_badges = " ".join(f"[{t}]" for t in task_data.get("tags", []))
             stars = "★" * task_data.get("stars", 0)
             st.button(
-                f"{task_name} {stars} {tag_badges}", key=f"task_{task_name}",
+                f"{task_name} {stars} {tag_badges}", key=f"task_btn_{task_name}",
                 on_click=lambda n=task_name: st.session_state.update({"current_task": n})
             )
 
-    # ---------------- Subpágina -----------------------------------------
+    # --- Subpágina --------------------------------------------------------
     if st.session_state.current_task:
         task_name = st.session_state.current_task
         task = folder[task_name]
 
-        st.subheader("Subpágina:")
-        st.text_input(
-            "Título de la subpágina", value=task_name, key="rename_task",
-            on_change=lambda: rename_task(task_name, data, folder)
-        )
+        st.divider()
+        st.subheader("Detalles de la subpágina")
 
+        # Renombrar título
+        st.text_input(
+            "Título", value=task_name, key="rename_task_input"
+        )
+        st.button("Guardar título", on_click=rename_task_callback)
+
+        # Volver botón
         if st.button("⬅️ Volver a subpáginas"):
             st.session_state.current_task = None
-            return
+            st.rerun()
 
         # Galería
         st.text_input("URL de imagen (TradingView)", key="new_img", placeholder="https://...")
-        if st.button("Añadir imagen"):
-            url = st.session_state.new_img.strip()
-            if url:
-                task["images"].append(url)
-                save_data(data)
-                st.session_state.new_img = ""
-                st.experimental_rerun()
+        st.button("Añadir imagen", on_click=add_image_callback)
 
         if task["images"]:
             st.image(task["images"], width=660)
@@ -197,7 +245,7 @@ def main():
         if st.button("Guardar comentario"):
             task["comments"] = comment
             save_data(data)
-            st.success("Comentario guardado")
+            st.success("Comentario guardado ✔️")
 
         # Etiquetas
         st.markdown("### Etiquetas")
@@ -206,49 +254,28 @@ def main():
             new_tags = [t.strip() for t in new_tag_str.split(",") if t.strip()]
             task["tags"].extend([t for t in new_tags if t not in task["tags"]])
             save_data(data)
-            st.experimental_rerun()
+            st.rerun()
 
         state_tags = st.multiselect(
             "Etiquetas de estado", DEFAULT_STATE_TAGS,
             default=[t for t in task["tags"] if t in DEFAULT_STATE_TAGS]
         )
-        synchronize_state_tags(task, state_tags)
+        # Sincronizar
+        changed = False
+        for tag in DEFAULT_STATE_TAGS:
+            if tag in state_tags and tag not in task["tags"]:
+                task["tags"].append(tag); changed = True
+            elif tag not in state_tags and tag in task["tags"]:
+                task["tags"].remove(tag); changed = True
+        if changed:
+            save_data(data)
 
         # Estrellas
-        st.markdown("### Valoración (0‑5 ⭐)")
-        stars = st.slider("Puntuación", 0, 5, task.get("stars", 0), key="star_slider")
+        star_key = f"star_slider_{task_name}"
+        stars = st.slider("Valoración (0‑5 ⭐)", 0, 5, task.get("stars", 0), key=star_key)
         if stars != task.get("stars", 0):
             task["stars"] = stars
             save_data(data)
-
-# ---------------------------------------------------------------------------
-# Helper functions
-# ---------------------------------------------------------------------------
-
-def rename_task(old_name: str, data: Dict, folder: Dict):
-    new_name = st.session_state.rename_task.strip()
-    if new_name and new_name != old_name:
-        if new_name in folder:
-            st.warning("Ya existe una tarea con ese nombre")
-        else:
-            folder[new_name] = folder.pop(old_name)
-            save_data(data)
-            st.session_state.current_task = new_name
-            st.experimental_rerun()
-
-
-def synchronize_state_tags(task: Dict, selected: List[str]):
-    changed = False
-    # Añadir / quitar en función del multiselect
-    for tag in DEFAULT_STATE_TAGS:
-        if tag in selected and tag not in task["tags"]:
-            task["tags"].append(tag)
-            changed = True
-        elif tag not in selected and tag in task["tags"]:
-            task["tags"].remove(tag)
-            changed = True
-    if changed:
-        save_data(data)
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
