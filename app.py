@@ -4,17 +4,15 @@ from pathlib import Path
 from typing import Dict, List
 import base64
 
-
 """
-AlgoMind-Tareas 🧠
+Trading Tasks App – v1.4.2 (syntax & nav fix)
 ============================================
-Lista de tareas
+Correcciones
 ------------
-* ILQ
-* SLQ
-* TLQ
-* DIDM
-* IA
+* **SyntaxError** por paréntesis sin cerrar en el `slider`.
+* Añadidas funciones faltantes `open_task()` y `back_to_root()`.
+* Todas las llamadas de navegación usan `rerun()` seguro.
+* Código finalizado con `if __name__ == "__main__"`.
 """
 
 DATA_FILE = Path("data.json")
@@ -213,18 +211,33 @@ def main():
 
     selected_tags = sidebar(data)
 
-    st.title("📂 Tareas")
+    st.title("📂 Tareas de Trading – Mentoría")
 
-    # Root view
+    # Root view – lista de carpetas
     if st.session_state.current_folder is None:
         st.header("Carpetas")
+
+        def folder_matches(folder_dict: Dict, tags: List[str]) -> bool:
+            """Devuelve True si alguna subpágina del folder contiene una de las etiquetas."""
+            if not tags:  # sin filtros → siempre mostrar
+                return True
+            for task in folder_dict.values():
+                if set(task.get("tags", [])) & set(tags):
+                    return True
+            return False
+
         if not data:
             st.info("Añade una carpeta en la barra lateral ⬅️")
-        for name in data:
-            st.button(f"🗂️ {name}", key=f"home_{name}", on_click=lambda n=name: navigate_folder(n))
+
+        # Mostrar solo carpetas que cumplan el filtro
+        for name, folder_dict in data.items():
+            if folder_matches(folder_dict, selected_tags):
+                st.button(
+                    f"🗂️ {name}", key=f"home_{name}", on_click=lambda n=name: navigate_folder(n)
+                )
         return
 
-    # Inside folder
+    # ---------------- Dentro de una carpeta ----------------------------
     folder_name = st.session_state.current_folder
     folder = data[folder_name]
 
