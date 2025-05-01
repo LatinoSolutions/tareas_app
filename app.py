@@ -194,7 +194,7 @@ def main():
 
     selected_tags = sidebar(data)
 
-    st.title("📂 Tareas de Trading – Mentoría")
+    st.title("📂 Carpetas de Tareas")
 
     # ---------------- Página principal -------------------------------
     if st.session_state.current_folder is None:
