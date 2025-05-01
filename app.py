@@ -4,15 +4,17 @@ from pathlib import Path
 from typing import Dict, List
 import base64
 
+
 """
-Trading Tasks App – v1.4.2 (syntax & nav fix)
+AlgoMind-Tareas
 ============================================
-Correcciones
+
 ------------
-* **SyntaxError** por paréntesis sin cerrar en el `slider`.
-* Añadidas funciones faltantes `open_task()` y `back_to_root()`.
-* Todas las llamadas de navegación usan `rerun()` seguro.
-* Código finalizado con `if __name__ == "__main__"`.
+* ILQ
+* SLQ
+* TLQ
+* DIDM
+* IA
 """
 
 DATA_FILE = Path("data.json")
