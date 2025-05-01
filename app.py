@@ -5,20 +5,14 @@ from typing import Dict, List
 import base64
 
 """
-Trading Tasks App – v1.4.1 (bug‑fix)
-====================================
-Errores reportados
-------------------
-* **AttributeError** al usar `st.experimental_rerun()`.
-* Fallos al clicar carpetas en la barra lateral o al añadir imágenes / subpáginas.
-
-Solución
---------
-Se reemplaza la función `rerun()` por una versión *cross‑version* que usa
-`st.rerun()` cuando está disponible (Streamlit ≥1.27) y sólo recurre a
-`st.experimental_rerun()` como *fallback*.
-
-No cambian más funcionalidades respecto a v1.4.
+Trading Tasks App – v1.4.2 (syntax & nav fix)
+============================================
+Correcciones
+------------
+* **SyntaxError** por paréntesis sin cerrar en el `slider`.
+* Añadidas funciones faltantes `open_task()` y `back_to_root()`.
+* Todas las llamadas de navegación usan `rerun()` seguro.
+* Código finalizado con `if __name__ == "__main__"`.
 """
 
 DATA_FILE = Path("data.json")
@@ -55,18 +49,36 @@ def init_state():
         st.session_state.setdefault(k, v)
 
 # ---------------------------------------------------------------------------
-# Generic rerun helper (safe across versions) -------------------------------
+# Generic rerun helper
 # ---------------------------------------------------------------------------
 
 def rerun():
-    """Lanza un rerun compatible con cualquier versión de Streamlit."""
     if hasattr(st, "rerun"):
         st.rerun()
     else:
         st.experimental_rerun()
 
 # ---------------------------------------------------------------------------
-# Folder & task helpers -----------------------------------------------------
+# Navigation helpers
+# ---------------------------------------------------------------------------
+
+def open_task(name: str):
+    st.session_state.current_task = name
+    rerun()
+
+
+def back_to_root():
+    st.session_state.current_folder = None
+    st.session_state.current_task = None
+    rerun()
+
+
+def navigate_folder(name: str):
+    st.session_state.update({"current_folder": name, "current_task": None})
+    rerun()
+
+# ---------------------------------------------------------------------------
+# Folder & task actions
 # ---------------------------------------------------------------------------
 
 def add_folder():
@@ -149,13 +161,13 @@ def delete_task():
     rerun()
 
 # ---------------------------------------------------------------------------
-# Sidebar (backup + folder tree + filters) ----------------------------------
+# Sidebar: backup, folders, filters
 # ---------------------------------------------------------------------------
 
 def sidebar(data: Dict) -> List[str]:
     st.sidebar.title("☰ Navegación & Filtros")
 
-    # Backup section ------------------------------------------------------
+    # Backup
     with st.sidebar.expander("📦 Backup", expanded=False):
         if st.button("📥 Descargar backup"):
             b64 = base64.b64encode(json.dumps(data, ensure_ascii=False, indent=2).encode()).decode()
@@ -169,7 +181,7 @@ def sidebar(data: Dict) -> List[str]:
 
     st.sidebar.divider()
 
-    # Folder tree ---------------------------------------------------------
+    # Folder tree
     st.sidebar.markdown("### Carpetas")
     if data:
         for name in data:
@@ -182,20 +194,15 @@ def sidebar(data: Dict) -> List[str]:
 
     st.sidebar.divider()
 
-    # Tag filters ---------------------------------------------------------
+    # Tag filters
     all_tags = set(DEFAULT_STATE_TAGS)
     for folder in data.values():
         for task in folder.values():
             all_tags.update(task.get("tags", []))
     return st.sidebar.multiselect("Filtrar por etiquetas", sorted(all_tags))
 
-
-def navigate_folder(name: str):
-    st.session_state.update({"current_folder": name, "current_task": None})
-    rerun()
-
 # ---------------------------------------------------------------------------
-# Main ----------------------------------------------------------------------
+# Main
 # ---------------------------------------------------------------------------
 
 def main():
@@ -206,33 +213,30 @@ def main():
 
     st.title("📂 Tareas de Trading – Mentoría")
 
-    # ---------------- Vista general de carpetas -------------------------
+    # Root view
     if st.session_state.current_folder is None:
         st.header("Carpetas")
         if not data:
             st.info("Añade una carpeta en la barra lateral ⬅️")
         for name in data:
-            st.button(
-                f"🗂️ {name}", key=f"home_{name}",
-                on_click=lambda n=name: st.session_state.update({"current_folder": n}) or rerun()
-            )
+            st.button(f"🗂️ {name}", key=f"home_{name}", on_click=lambda n=name: navigate_folder(n))
         return
 
-    # ---------------- Dentro de una carpeta ----------------------------
+    # Inside folder
     folder_name = st.session_state.current_folder
     folder = data[folder_name]
 
     col_back, col_title = st.columns([1, 8])
     with col_back:
-        st.button("⬅️", help="Volver a carpetas", on_click=lambda: back_to_root())
+        st.button("⬅️", help="Volver a carpetas", on_click=back_to_root)
     with col_title:
         st.header(folder_name)
 
-    # Crear subpágina
+    # Create subpage
     st.text_input("Nueva subpágina", key="new_task", placeholder="Ej: Patrón EURUSD 4H")
     st.button("➕ Crear subpágina", on_click=add_task)
 
-    # Listado de subpáginas
+    # Filtered listing
     task_items = folder.items()
     if selected_tags:
         task_items = [(k, v) for k, v in task_items if set(v.get("tags", [])) & set(selected_tags)]
@@ -247,12 +251,9 @@ def main():
         with col2:
             tags = " ".join(f"[{t}]" for t in task_data.get("tags", []))
             stars = "★" * task_data.get("stars", 0)
-            st.button(
-                f"{task_name} {stars} {tags}", key=f"open_{task_name}",
-                on_click=lambda n=task_name: open_task(n)
-            )
+            st.button(f"{task_name} {stars} {tags}", key=f"open_{task_name}", on_click=lambda n=task_name: open_task(n))
 
-    # ---------------- Subpágina ----------------------------------------
+    # Subpage view
     if st.session_state.current_task:
         task_name = st.session_state.current_task
         task = folder[task_name]
@@ -280,7 +281,9 @@ def main():
         st.markdown("### Comentarios")
         comment = st.text_area("Área de comentarios", value=task.get("comments", ""))
         if st.button("Guardar comentario"):
-            task["comments"] = comment; save_data(data); st.success("Comentario guardado ✔️")
+            task["comments"] = comment
+            save_data(data)
+            st.success("Comentario guardado ✔️")
 
         st.markdown("### Estado")
         current_state = next((t for t in task.get("tags", []) if t in DEFAULT_STATE_TAGS), "No revisada")
@@ -294,7 +297,15 @@ def main():
         if st.button("Guardar etiquetas") and new_tag_str.strip():
             new_tags = [t.strip() for t in new_tag_str.split(",") if t.strip()]
             task["tags"].extend([t for t in new_tags if t not in task["tags"]])
-            save_data(data); rerun()
+            save_data(data)
+            rerun()
 
         st.markdown("### Valoración ⭐")
-        stars = st.slider("0‑5", 0,
+        stars = st.slider("0-5", 0, 5, task.get("stars", 0), key=f"star_{task_name}")
+        if stars != task.get("stars", 0):
+            task["stars"] = stars
+            save_data(data)
+
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    main()
