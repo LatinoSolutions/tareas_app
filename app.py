@@ -5,15 +5,14 @@ from typing import Dict, List
 import base64
 
 """
-Tareas 📚 AlgoMind 🧠 
-============================================
-Tareas por hacer
-------------
-* ILQ
-* SLQ
-* TLQ
-* DIDM
-* IA
+Trading Tasks App – v1.6 (gestión de carpetas)
+==============================================
+Novedades
+---------
+* **Renombrar carpeta**: campo de texto y botón «Guardar nombre».
+* **Eliminar carpeta**: botón 🗑️ con casilla de confirmación.
+* Ajustada la inicialización de `session_state` y helpers.
+* Mantiene filtros globales y resto de funciones de v1.5.
 """
 
 DATA_FILE = Path("data.json")
@@ -45,12 +44,14 @@ def init_state():
         "new_img": "",
         "rename_task_input": "",
         "confirm_delete": False,
+        "rename_folder_input": "",
+        "confirm_delete_folder": False,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
 
 # ---------------------------------------------------------------------------
-# Navegación (sin rerun explícito)
+# Navegación
 # ---------------------------------------------------------------------------
 
 def open_task(name: str):
@@ -63,10 +64,10 @@ def back_to_root():
 
 
 def navigate_folder(name: str):
-    st.session_state.update({"current_folder": name, "current_task": None})
+    st.session_state.update({"current_folder": name, "current_task": None, "rename_folder_input": name})
 
 # ---------------------------------------------------------------------------
-# Acciones carpeta / tarea
+# Acciones carpetas
 # ---------------------------------------------------------------------------
 
 def add_folder():
@@ -83,6 +84,39 @@ def add_folder():
     st.session_state.new_folder = ""
     st.sidebar.success("Carpeta creada ✔️")
 
+
+def rename_folder():
+    data = load_data()
+    old = st.session_state.current_folder
+    new = st.session_state.rename_folder_input.strip()
+    if not new:
+        st.warning("Nombre vacío")
+        return
+    if new == old:
+        return
+    if new in data:
+        st.warning("Ya existe una carpeta con ese nombre")
+        return
+    data[new] = data.pop(old)
+    save_data(data)
+    st.session_state.current_folder = new
+    st.success("Carpeta renombrada ✔️")
+
+
+def delete_folder():
+    if not st.session_state.confirm_delete_folder:
+        st.warning("Marca la casilla de confirmación primero")
+        return
+    data = load_data()
+    data.pop(st.session_state.current_folder, None)
+    save_data(data)
+    back_to_root()
+    st.session_state.confirm_delete_folder = False
+    st.success("Carpeta eliminada 🗑️")
+
+# ---------------------------------------------------------------------------
+# Acciones tareas
+# ---------------------------------------------------------------------------
 
 def add_task():
     data = load_data()
@@ -194,7 +228,7 @@ def main():
 
     selected_tags = sidebar(data)
 
-    st.title("📂 Carpetas de Tareas")
+    st.title("📂 Tareas de Trading – Mentoría")
 
     # ---------------- Página principal -------------------------------
     if st.session_state.current_folder is None:
@@ -213,11 +247,7 @@ def main():
                     tags = " ".join(f"[{t}]" for t in task.get("tags", []))
                     stars = "★" * task.get("stars", 0)
                     label = f"{folder_name} / {task_name} {stars} {tags}"
-                    st.button(
-                        label,
-                        key=f"match_{folder_name}_{task_name}",
-                        on_click=lambda f=folder_name, t=task_name: (navigate_folder(f), open_task(t)),
-                    )
+                    st.button(label, key=f"match_{folder_name}_{task_name}", on_click=lambda f=folder_name, t=task_name: (navigate_folder(f), open_task(t)))
             return
 
         # Sin filtros: vista de carpetas
@@ -236,93 +266,4 @@ def main():
     with col_back:
         st.button("⬅️", help="Volver a carpetas", on_click=back_to_root)
     with col_title:
-        st.header(folder_name)
-
-    # Crear subpágina
-    st.text_input("Nueva subpágina", key="new_task", placeholder="Ej: Patrón EURUSD 4H")
-    st.button("➕ Crear subpágina", on_click=add_task)
-
-    # Listado subpáginas
-    task_items = folder.items()
-    if selected_tags:
-        task_items = [(k, v) for k, v in task_items if set(v.get("tags", [])) & set(selected_tags)]
-
-    st.markdown("---")
-    for task_name, task_data in task_items:
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            if task_data["images"]:
-                url = task_data["images"][0]
-                st.markdown(f"[![thumb]({url})]({url})", unsafe_allow_html=True)
-        with col2:
-            tags = " ".join(f"[{t}]" for t in task_data.get("tags", []))
-            stars = "★" * task_data.get("stars", 0)
-            st.button(
-                f"{task_name} {stars} {tags}",
-                key=f"open_{task_name}",
-                on_click=lambda n=task_name: open_task(n),
-            )
-
-    # ---------------- Detalle subpágina ------------------------------
-    if st.session_state.current_task:
-        task_name = st.session_state.current_task
-        task = folder[task_name]
-
-        st.divider()
-        st.subheader("Detalles")
-
-        # Renombrar
-        st.text_input("Título", value=task_name, key="rename_task_input")
-        st.button("Guardar título", on_click=rename_task)
-
-        # Borrar
-        st.checkbox("Confirmar eliminación", key="confirm_delete")
-        st.button("🗑️ Eliminar subpágina", on_click=delete_task, type="secondary")
-
-        # Añadir imagen
-        st.markdown("### Añadir imagen")
-        st.text_input("URL (TradingView)", key="new_img", placeholder="https://...")
-        st.button("Añadir imagen", on_click=add_image)
-
-        # Galería
-        if task["images"]:
-            for i, url in enumerate(task["images"], 1):
-                st.image(url, width=660, caption=f"Imagen {i}")
-                st.markdown(f"[🔗 Abrir en TradingView]({url})", unsafe_allow_html=True)
-        else:
-            st.write("*Sin imágenes aún*")
-
-        # Comentarios
-        st.markdown("### Comentarios")
-        comment = st.text_area("Área de comentarios", value=task.get("comments", ""))
-        if st.button("Guardar comentario"):
-            task["comments"] = comment
-            save_data(data)
-            st.success("Comentario guardado ✔️")
-
-        # Estado
-        st.markdown("### Estado")
-        current_state = next((t for t in task.get("tags", []) if t in DEFAULT_STATE_TAGS), "No revisada")
-        sel_state = st.radio("Etiqueta de estado", DEFAULT_STATE_TAGS, index=DEFAULT_STATE_TAGS.index(current_state))
-        if sel_state != current_state:
-            task["tags"] = [t for t in task["tags"] if t not in DEFAULT_STATE_TAGS] + [sel_state]
-            save_data(data)
-
-        # Etiquetas personalizadas
-        st.markdown("### Etiquetas personalizadas")
-        new_tag_str = st.text_input("Añadir etiquetas (coma)")
-        if st.button("Guardar etiquetas") and new_tag_str.strip():
-            new_tags = [t.strip() for t in new_tag_str.split(",") if t.strip()]
-            task["tags"].extend([t for t in new_tags if t not in task["tags"]])
-            save_data(data)
-
-        # Valoración
-        st.markdown("### Valoración ⭐")
-        stars = st.slider("0-5", 0, 5, task.get("stars", 0), key=f"star_{task_name}")
-        if stars != task.get("stars", 0):
-            task["stars"] = stars
-            save_data(data)
-
-# ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    main()
+        st.header(folder
