@@ -6,9 +6,9 @@ import base64
 
 
 """
-AlgoMind-Tareas
+AlgoMind-Tareas 🧠
 ============================================
-
+Lista de tareas
 ------------
 * ILQ
 * SLQ
