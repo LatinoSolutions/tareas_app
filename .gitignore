@@ -1,0 +1,5 @@
+echo ".idea/
+__pycache__/
+*.pyc
+.env
+data.json" >> .gitignore
