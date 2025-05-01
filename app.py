@@ -5,11 +5,15 @@ from typing import Dict, List
 import base64
 
 """
-Trading Tasks App – v1.6.3 (archivo completo)
+Tareas 📚 AlgoMind 🧠 
 ============================================
-* Gestión total de carpetas y subpáginas.
-* Filtro global.
-* Sin código truncado.
+Tareas por hacer
+------------
+* ILQ
+* SLQ
+* TLQ
+* DIDM
+* IA
 """
 
 DATA_FILE = Path("data.json")
@@ -121,7 +125,7 @@ def sidebar(data: Dict) -> List[str]:
 
 def main():
     init_state(); data = load_data(); sel_tags = sidebar(data)
-    st.title("📂 Tareas de Trading – Mentoría")
+    st.title("📂 Carpetas de Tareas")
     # Root view
     if st.session_state.current_folder is None:
         if sel_tags:
