@@ -3,14 +3,15 @@ import json, uuid, datetime, base64
 from pathlib import Path
 
 """
-Trading Tasks – v2.2.0  
-=======================
-Cambios clave
--------------
-1. **Menú simplificado** – se elimina la opción «Etiquetas».  
-2. **Edición en vista Detalle** – formulario dentro de un *expander* para modificar título, notas, etiquetas y estado (Revisada/No revisada/Comentario pendiente).  
-3. Filtro de etiquetas en la barra lateral sigue activo.  
-4. Vista Biblioteca mantiene enlace "🔗 Abrir imagen" y botón Compartir.
+Tareas 📚 AlgoMind 🧠 
+============================================
+Tareas por hacer
+------------
+* ILQ ✅
+* SLQ ✅
+* TLQ ✅
+* DIDM
+* IA
 """
 
 ROOT = Path(__file__).parent
