@@ -3,14 +3,16 @@ import json, uuid, datetime, random
 from pathlib import Path
 
 """
-Trading Tasks – v2.4.0  
-=======================
-### Cambios
-1. **Edición completa en vista Detalle** (título, notas, etiquetas, estado).  
-2. Constantes `IMG_FEED_W` y `IMG_DETAIL_W` para ajustar el tamaño de las imágenes.  
-3. Menú: Feed • Biblioteca • Estudio • Detalle se mantiene.
+Biblioteca - AlgoMind 
+============================================
+Tareas por hacer
+------------
+* ILQ ✅
+* SLQ ✅
+* TLQ ✅
+* DIDM ✅
+* IA
 """
-
 ROOT = Path(__file__).parent
 DATA_FILE = ROOT / "data.json"
 POSTS_FILE = ROOT / "posts.json"
@@ -80,7 +82,7 @@ def open_detail(pid):
 
 
 def render_feed(posts):
-    st.markdown("## Feed comunitario")
+    st.markdown("## Tareas, Ejemplos, Casos de Estudio")
     form_new_post(posts)
     sel = set(st.session_state.selected_tags)
     for p in sorted(posts, key=lambda x: x["created_at"], reverse=True):
