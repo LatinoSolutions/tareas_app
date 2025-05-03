@@ -10,7 +10,7 @@ Tareas por hacer
 * ILQ ✅
 * SLQ ✅
 * TLQ ✅
-* DIDM ✅
+* DIDM
 * IA
 """
 
@@ -85,7 +85,7 @@ def open_detail(pid):
     st.session_state.update({"page": "Detalle", "detail_id": pid})
 
 def render_feed(posts):
-    st.markdown("## Tareas / Ejemplos Feed")
+    st.markdown("## Tareas - Ejemplos")
     form_new_post(posts)
     sel = set(st.session_state.selected_tags)
     for p in sorted(posts, key=lambda x: x["created_at"], reverse=True):
@@ -102,14 +102,34 @@ def render_detail(posts):
     post = next((x for x in posts if x["id"] == st.session_state.detail_id), None)
     if not post:
         st.error("Post no encontrado"); return
+
     if st.button("← Volver al feed"):
         st.session_state.detail_id = None; st.experimental_rerun()
+
     st.header(post["title"])
     st.image(post["image"], width=650)
     st.markdown("*Etiquetas:* " + ", ".join(post["tags"]) if post["tags"] else "*Sin etiquetas*")
     st.write(post.get("notes", "—"))
 
-# Biblioteca ------------------------
+    # ----- Comentarios -----
+    st.markdown("#### Comentarios")
+    if post["comments"]:
+        for c in post["comments"]:
+            st.markdown(f"- *{c['author']}* ({c['ts']}): {c['text']}")
+    else:
+        st.write("*Sin comentarios aún*")
+
+    new_c = st.text_input("Nuevo comentario", key="new_comment")
+    if st.button("Publicar comentario") and new_c.strip():
+        post["comments"].append({
+            "author": "you",
+            "text": new_c.strip(),
+            "ts": datetime.datetime.utcnow().isoformat(),
+        })
+        save_posts(posts)
+        st.experimental_rerun()
+
+# Biblioteca ------------------------ ------------------------
 
 def render_library(lib, posts):
     st.markdown("## Mi biblioteca (solo lectura)")
