@@ -3,12 +3,15 @@ import json, uuid, datetime, random
 from pathlib import Path
 
 """
-Trading Tasks – v2.3.0  
-=======================
-### Novedades
-1. **Modo Estudio** (quiz): muestra una imagen aleatoria y pide adivinar la categoría principal.  
-2. Menú lateral ahora incluye: *Feed • Biblioteca • Estudio • Detalle*.  
-3. Modo Estudio usa las etiquetas existentes (excluyendo las de estado) y no altera los datos.
+Tareas 📚 AlgoMind 🧠 
+============================================
+Tareas por hacer
+------------
+* ILQ ✅
+* SLQ ✅
+* TLQ ✅
+* DIDM ✅
+* IA
 """
 
 ROOT = Path(__file__).parent
