@@ -3,15 +3,12 @@ import json, uuid, datetime, random
 from pathlib import Path
 
 """
-Tareas 📚 AlgoMind 🧠 
-============================================
-Tareas por hacer
-------------
-* ILQ ✅
-* SLQ ✅
-* TLQ ✅
-* DIDM
-* IA
+Trading Tasks – v2.4.0  
+=======================
+### Cambios
+1. **Edición completa en vista Detalle** (título, notas, etiquetas, estado).  
+2. Constantes `IMG_FEED_W` y `IMG_DETAIL_W` para ajustar el tamaño de las imágenes.  
+3. Menú: Feed • Biblioteca • Estudio • Detalle se mantiene.
 """
 
 ROOT = Path(__file__).parent
@@ -19,7 +16,12 @@ DATA_FILE = ROOT / "data.json"
 POSTS_FILE = ROOT / "posts.json"
 DEFAULT_STATE_TAGS = ["Revisada", "No revisada", "Comentario pendiente"]
 
-# Helpers ---------------------------
+# --- Ajusta aquí el ancho de imágenes ---
+IMG_FEED_W = 550       # ancho en el feed
+IMG_DETAIL_W = 800     # ancho en vista detalle
+IMG_STUDY_W = 600      # ancho en modo estudio
+
+# -------------- helpers -----------------
 
 def load_json(p: Path, default):
     return json.loads(p.read_text("utf-8")) if p.exists() else default
@@ -27,7 +29,7 @@ def load_json(p: Path, default):
 def save_json(p: Path, obj):
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), "utf-8")
 
-# State -----------------------------
+# -------------- sesión -------------------
 
 def init_state():
     st.session_state.setdefault("page", "Feed")
@@ -36,38 +38,29 @@ def init_state():
     st.session_state.setdefault("current_quiz_post", None)
     st.session_state.setdefault("quiz_feedback", "")
 
-# Data ------------------------------
+# -------------- data ---------------------
 
 def load_posts(): return load_json(POSTS_FILE, [])
 
 def save_posts(ps): save_json(POSTS_FILE, ps)
 
-def load_lib(): return load_json(DATA_FILE, {})
+# -------------- tags ---------------------
 
-def save_lib(lb): save_json(DATA_FILE, lb)
+def all_tags(posts):
+    tag_set = set()
+    for p in posts: tag_set.update(p["tags"])
+    return sorted(tag_set)
 
-# Tags ------------------------------
+# -------------- sidebar ------------------
 
-def all_tags(posts, lib):
-    tags = set()
-    for src in (posts,):
-        for p in src:
-            tags.update(p["tags"])
-    for fd in lib.values():
-        for t in fd.values():
-            tags.update(t.get("tags", []))
-    return sorted(tags)
-
-# Sidebar ---------------------------
-
-def sidebar(posts, lib):
+def sidebar(posts):
     st.sidebar.title("Menú")
-    options = ["Feed", "Biblioteca", "Estudio", "Detalle"]
-    st.sidebar.radio("Vista", options, key="page", index=options.index(st.session_state.page))
+    opts = ["Feed", "Biblioteca", "Estudio", "Detalle"]
+    st.sidebar.radio("Vista", opts, index=opts.index(st.session_state.page), key="page")
     st.sidebar.markdown("### Filtro etiquetas")
-    st.sidebar.multiselect("", all_tags(posts, lib), key="selected_tags")
+    st.sidebar.multiselect("", all_tags(posts), key="selected_tags")
 
-# Feed ------------------------------
+# -------------- Feed ---------------------
 
 def form_new_post(posts):
     with st.expander("➕ Nueva publicación", expanded=False):
@@ -75,28 +68,30 @@ def form_new_post(posts):
             url = st.text_input("URL imagen (obligatorio)")
             title = st.text_input("Título")
             notes = st.text_area("Notas")
-            tags = st.text_input("Etiquetas (separadas por coma)")
+            tag_txt = st.text_input("Etiquetas (coma)")
             if st.form_submit_button("Publicar") and url.strip():
-                tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-                posts.append(dict(id=str(uuid.uuid4()), created_at=datetime.datetime.utcnow().isoformat(), image=url.strip(), gallery=[], title=title or "Sin título", notes=notes, tags=tag_list, comments=[], private=False))
+                tags = [t.strip() for t in tag_txt.split(",") if t.strip()]
+                posts.append(dict(id=str(uuid.uuid4()), created_at=datetime.datetime.utcnow().isoformat(), image=url.strip(), gallery=[], title=title or "Sin título", notes=notes, tags=tags, comments=[]))
                 save_posts(posts); st.success("Publicada ✔️")
+
 
 def open_detail(pid):
     st.session_state.update({"page": "Detalle", "detail_id": pid})
 
+
 def render_feed(posts):
-    st.markdown("## Tareas - Ejemplos")
+    st.markdown("## Feed comunitario")
     form_new_post(posts)
     sel = set(st.session_state.selected_tags)
     for p in sorted(posts, key=lambda x: x["created_at"], reverse=True):
         if sel and not (set(p["tags"]) & sel):
             continue
-        st.image(p["image"], width=550)
+        st.image(p["image"], width=IMG_FEED_W)
         st.markdown(f"**{p['title']}** • {' '.join('['+t+']' for t in p['tags'])}")
         st.button("Ver detalles", key=p["id"], on_click=lambda pid=p["id"]: open_detail(pid))
         st.divider()
 
-# Detail ----------------------------
+# -------------- Detalle ------------------
 
 def render_detail(posts):
     post = next((x for x in posts if x["id"] == st.session_state.detail_id), None)
@@ -107,88 +102,94 @@ def render_detail(posts):
         st.session_state.detail_id = None; st.experimental_rerun()
 
     st.header(post["title"])
-    st.image(post["image"], width=650)
-    st.markdown("*Etiquetas:* " + ", ".join(post["tags"]) if post["tags"] else "*Sin etiquetas*")
+    st.image(post["image"], width=IMG_DETAIL_W)
+
+    if post["tags"]:
+        st.markdown("*Etiquetas:* " + ", ".join(post["tags"]))
     st.write(post.get("notes", "—"))
 
-    # ----- Comentarios -----
+    # --- Formulario de edición ---
+    with st.expander("✏️ Editar", expanded=False):
+        with st.form("edit_post"):
+            e_title = st.text_input("Título", value=post["title"])
+            e_notes = st.text_area("Notas", value=post.get("notes", ""))
+            e_tags_txt = st.text_input("Etiquetas (coma)", value=", ".join([t for t in post["tags"] if t not in DEFAULT_STATE_TAGS]))
+            current_state = next((t for t in post["tags"] if t in DEFAULT_STATE_TAGS), "No revisada")
+            e_state = st.radio("Estado", DEFAULT_STATE_TAGS, index=DEFAULT_STATE_TAGS.index(current_state))
+            if st.form_submit_button("Guardar"):
+                post["title"] = e_title or post["title"]
+                post["notes"] = e_notes
+                new_tags = [t.strip() for t in e_tags_txt.split(",") if t.strip()]
+                post["tags"] = new_tags + [e_state]
+                save_posts(posts); st.success("Actualizado ✔️"); st.experimental_rerun()
+
+    # --- Comentarios ---
     st.markdown("#### Comentarios")
     if post["comments"]:
         for c in post["comments"]:
             st.markdown(f"- *{c['author']}* ({c['ts']}): {c['text']}")
     else:
         st.write("*Sin comentarios aún*")
-
-    new_c = st.text_input("Nuevo comentario", key="new_comment")
+    new_c = st.text_input("Nuevo comentario")
     if st.button("Publicar comentario") and new_c.strip():
-        post["comments"].append({
-            "author": "you",
-            "text": new_c.strip(),
-            "ts": datetime.datetime.utcnow().isoformat(),
-        })
-        save_posts(posts)
-        st.experimental_rerun()
+        post["comments"].append({"author":"you","text":new_c.strip(),"ts":datetime.datetime.utcnow().isoformat()})
+        save_posts(posts); st.experimental_rerun()
 
-# Biblioteca ------------------------ ------------------------
+# -------------- Biblioteca ----------
 
-def render_library(lib, posts):
-    st.markdown("## Mi biblioteca (solo lectura)")
-    for fn, folder in lib.items():
-        st.subheader(fn)
-        for tn, t in folder.items():
-            st.markdown(f"### {tn}")
-            if t["images"]:
-                url=t["images"][0]; st.image(url, width=300); st.markdown(f"[🔗 Abrir imagen]({url})", unsafe_allow_html=True)
-            st.write(t.get("comments", "—"))
-            st.button("Compartir", key=f"share_{fn}_{tn}", on_click=lambda f=fn,n=tn: share_to_feed(f,n,t,posts))
+def render_library(posts):
+    st.markdown("## Biblioteca (solo lectura)")
+    # agrupamos por primera parte del título (carpeta)
+    by_folder = {}
+    for p in posts:
+        if "/" in p["title"]:
+            folder, rest = p["title"].split("/", 1)
+            by_folder.setdefault(folder.strip(), []).append((rest.strip(), p))
+    for folder, lst in by_folder.items():
+        st.subheader(folder)
+        for name, p in lst:
+            st.markdown(f"### {name}")
+            st.image(p["image"], width=300)
+            st.markdown(f"[🔗 Abrir imagen]({p['image']})", unsafe_allow_html=True)
 
-def share_to_feed(fn, tn, t, posts):
-    posts.append(dict(id=str(uuid.uuid4()), created_at=datetime.datetime.utcnow().isoformat(), image=t["images"][0] if t["images"] else "", gallery=t["images"][1:], title=f"{fn}/{tn}", notes=t.get("comments", ""), tags=t.get("tags", []), comments=[], private=False))
-    save_posts(posts); st.success("Compartido ✔️")
-
-# Estudio (quiz) --------------------
+# -------------- Estudio -------------
 
 def render_study(posts):
-    st.markdown("## Modo Estudio – ¿Qué categoría es?")
-    # Filtrar solo por etiquetas que no sean de estado
+    st.markdown("## Estudio – ¿Qué categoría ves?")
     quiz_posts = [p for p in posts if any(t not in DEFAULT_STATE_TAGS for t in p["tags"])]
     if not quiz_posts:
-        st.info("No hay publicaciones con etiquetas de categoría."); return
-
-    # Seleccionar post
+        st.info("No hay posts con categorías."); return
     if st.session_state.current_quiz_post is None:
         st.session_state.current_quiz_post = random.choice(quiz_posts)["id"]
     post = next(x for x in posts if x["id"] == st.session_state.current_quiz_post)
-
-    st.image(post["image"], width=600)
-    # Posibles etiquetas (excluir de estado)
-    tag_pool = sorted({t for p in quiz_posts for t in p["tags"] if t not in DEFAULT_STATE_TAGS})
-    guess = st.selectbox("Selecciona la categoría", tag_pool)
+    st.image(post["image"], width=IMG_STUDY_W)
+    pool = sorted({t for q in quiz_posts for t in q["tags"] if t not in DEFAULT_STATE_TAGS})
+    guess = st.selectbox("Selecciona la categoría", pool)
     if st.button("Comprobar"):
         correct = guess in [t for t in post["tags"] if t not in DEFAULT_STATE_TAGS]
-        st.session_state.quiz_feedback = "✅ Correcto" if correct else f"❌ Incorrecto. Era: {', '.join(post['tags'])}"
+        st.session_state.quiz_feedback = "✅ Correcto" if correct else "❌ Incorrecto. Era: " + ", ".join(post["tags"])
     st.write(st.session_state.quiz_feedback)
     if st.button("Siguiente"):
         st.session_state.current_quiz_post = random.choice(quiz_posts)["id"]
         st.session_state.quiz_feedback = ""
         st.experimental_rerun()
 
-# Main ------------------------------
+# -------------- Main ----------------
 
 def main():
     init_state()
-    posts = load_posts(); lib = load_lib()
+    posts = load_posts()
     if st.session_state.page == "Detalle" and not st.session_state.detail_id:
         st.session_state.page = "Feed"
-    sidebar(posts, lib)
-    page = st.session_state.page
-    if page == "Feed":
+    sidebar(posts)
+    pg = st.session_state.page
+    if pg == "Feed":
         render_feed(posts)
-    elif page == "Biblioteca":
-        render_library(lib, posts)
-    elif page == "Estudio":
+    elif pg == "Biblioteca":
+        render_library(posts)
+    elif pg == "Estudio":
         render_study(posts)
-    elif page == "Detalle":
+    elif pg == "Detalle":
         render_detail(posts)
 
 if __name__ == "__main__":
