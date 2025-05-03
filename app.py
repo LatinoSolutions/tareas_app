@@ -5,10 +5,12 @@ from typing import Dict, List
 import uuid, datetime, base64
 
 """
-Trading Tasks – v2.1.1 (detalles y UI)
-======================================
-* **Fix**: error al abrir «Ver detalles» (radio lack value).  
-* **Nueva publicación** ahora en un *expander* contraído para ahorrar espacio.
+Trading Tasks – v2.1.2 (detalle seguro + warning fix)
+====================================================
+* Formulario "Nueva publicación" en expander (ya agregado).  
+* **Soluciona**: warning "default value but also set via Session State" y excepción al volver.  
+  - El *radio* ya no recibe `index`; simplemente refleja `st.session_state.page`.  
+  - El botón "← Volver al feed" usa `st.session_state.update()` antes del `rerun`.
 """
 
 ROOT = Path(__file__).parent
@@ -43,7 +45,7 @@ def save_lib(l): save_json(DATA_FILE, l)
 # ---------- Tags ------------------
 
 def all_tags(posts, lib):
-    s = set(DEFAULT_STATE_TAGS)
+    s=set(DEFAULT_STATE_TAGS)
     for p in posts: s.update(p["tags"])
     for f in lib.values():
         for t in f.values(): s.update(t.get("tags", []))
@@ -53,7 +55,8 @@ def all_tags(posts, lib):
 
 def sidebar(posts, lib):
     st.sidebar.title("Menú")
-    st.sidebar.radio("Vista", ["Feed", "Biblioteca", "Etiquetas", "Detalle"], key="page", index=["Feed","Biblioteca","Etiquetas","Detalle"].index(st.session_state.page) if st.session_state.page in ["Feed","Biblioteca","Etiquetas","Detalle"] else 0)
+    # Radio refleja siempre el valor en session_state.page
+    st.sidebar.radio("Vista", ["Feed", "Biblioteca", "Etiquetas", "Detalle"], key="page")
     st.sidebar.markdown("### Filtro etiquetas")
     st.sidebar.multiselect("", all_tags(posts, lib), key="selected_tags")
 
@@ -68,7 +71,7 @@ def form_new_post(posts):
             tags = st.multiselect("Etiquetas", all_tags(posts, load_lib()))
             public = st.checkbox("Pública", value=True)
             if st.form_submit_button("Publicar") and url.strip():
-                post = dict(id=str(uuid.uuid4()), created_at=datetime.datetime.utcnow().isoformat(), image=url.strip(), gallery=[], title=title or "Sin título", notes=notes, tags=tags, comments=[], private=not public)
+                post=dict(id=str(uuid.uuid4()),created_at=datetime.datetime.utcnow().isoformat(),image=url.strip(),gallery=[],title=title or "Sin título",notes=notes,tags=tags,comments=[],private=not public)
                 posts.append(post); save_posts(posts); st.success("Publicada ✔️")
 
 # ---------- Feed ------------------
@@ -78,7 +81,7 @@ def open_detail(pid): st.session_state.update({"page":"Detalle","detail_id":pid}
 def render_feed(posts):
     st.markdown("## Feed comunitario")
     form_new_post(posts)
-    sel = set(st.session_state.selected_tags)
+    sel=set(st.session_state.selected_tags)
     for p in sorted(posts, key=lambda x: x["created_at"], reverse=True):
         if sel and not (set(p["tags"]) & sel): continue
         st.image(p["image"], width=550)
@@ -89,33 +92,32 @@ def render_feed(posts):
 # ---------- Detail ----------------
 
 def render_detail(posts):
-    post = next((x for x in posts if x["id"] == st.session_state.detail_id), None)
+    post=next((x for x in posts if x["id"]==st.session_state.detail_id),None)
     if not post:
         st.error("Post no encontrado"); return
-    if st.button("← Volver al feed"): st.session_state.page="Feed"; st.session_state.detail_id=None; st.experimental_rerun()
+    if st.button("← Volver al feed"):
+        st.session_state.update({"page":"Feed","detail_id":None}); st.experimental_rerun()
     st.header(post["title"])
     st.image(post["image"], width=660)
     st.write(post["notes"] or "—")
     st.markdown("#### Comentarios")
     for c in post["comments"]:
         st.markdown(f"- *{c['author']}* ({c['ts']}): {c['text']}")
-    new_c = st.text_input("Nuevo comentario")
+    new_c=st.text_input("Nuevo comentario", key="comment_input")
     if st.button("Publicar comentario") and new_c.strip():
         post["comments"].append({"author":"you","text":new_c.strip(),"ts":datetime.datetime.utcnow().isoformat()}); save_posts(posts); st.experimental_rerun()
 
-# ---------- Biblioteca ------------ (solo lectura por brevedad)
+# ---------- Biblioteca (read‑only) ---------------
 
 def render_library(lib, posts):
-    st.markdown("## Mi biblioteca (solo lectura de momento)")
+    st.markdown("## Mi biblioteca (solo lectura)")
     for fn, folder in lib.items():
         st.subheader(fn)
         for tn, t in folder.items():
             st.markdown(f"### {tn}")
             if t["images"]: st.image(t["images"][0], width=300)
             st.write(t.get("comments","—"))
-            if st.button("Compartir", key=f"share_{fn}_{tn}"):
-                share_to_feed(fn, tn, t, posts)
-
+            if st.button("Compartir", key=f"share_{fn}_{tn}"): share_to_feed(fn, tn, t, posts)
 
 def share_to_feed(fn, tn, t, posts):
     post=dict(id=str(uuid.uuid4()),created_at=datetime.datetime.utcnow().isoformat(),image=t["images"][0] if t["images"] else "",gallery=t["images"][1:],title=f"{fn}/{tn}",notes=t.get("comments",""),tags=t.get("tags",[]),comments=[],private=False)
@@ -125,9 +127,9 @@ def share_to_feed(fn, tn, t, posts):
 
 def render_tags(posts, lib):
     st.markdown("## Gestor de etiquetas")
-    tag = st.selectbox("Etiqueta", all_tags(posts, lib))
-    new = st.text_input("Renombrar", value=tag, key="tag_new")
-    col1, col2 = st.columns(2)
+    tag=st.selectbox("Etiqueta", all_tags(posts, lib))
+    new=st.text_input("Renombrar", value=tag, key="tag_new")
+    col1,col2=st.columns(2)
     if col1.button("Renombrar") and new.strip() and new!=tag:
         for p in posts: p["tags"]=[new if t==tag else t for t in p["tags"]]
         for f in lib.values():
@@ -142,15 +144,12 @@ def render_tags(posts, lib):
 # ---------- Main ------------------
 
 def main():
-    init_state(); posts = load_posts(); lib = load_lib(); sidebar(posts, lib)
-    if st.session_state.page == "Feed":
-        render_feed(posts)
-    elif st.session_state.page == "Biblioteca":
-        render_library(lib, posts)
-    elif st.session_state.page == "Etiquetas":
-        render_tags(posts, lib)
-    elif st.session_state.page == "Detalle":
-        render_detail(posts)
+    init_state(); posts=load_posts(); lib=load_lib(); sidebar(posts, lib)
+    page=st.session_state.page
+    if page=="Feed": render_feed(posts)
+    elif page=="Biblioteca": render_library(lib, posts)
+    elif page=="Etiquetas": render_tags(posts, lib)
+    elif page=="Detalle": render_detail(posts)
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
