@@ -85,7 +85,7 @@ def open_detail(pid):
     st.session_state.update({"page": "Detalle", "detail_id": pid})
 
 def render_feed(posts):
-    st.markdown("## Feed comunitario")
+    st.markdown("## Tareas / Ejemplos Feed")
     form_new_post(posts)
     sel = set(st.session_state.selected_tags)
     for p in sorted(posts, key=lambda x: x["created_at"], reverse=True):
