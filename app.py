@@ -19,7 +19,7 @@ POSTS_FILE = ROOT / "posts.json"
 DEFAULT_STATE_TAGS = ["Revisada", "No revisada", "Comentario pendiente"]
 
 # --- Ajusta aquí el ancho de imágenes ---
-IMG_FEED_W = 550       # ancho en el feed
+IMG_FEED_W = 750       # ancho en el feed
 IMG_DETAIL_W = 800     # ancho en vista detalle
 IMG_STUDY_W = 600      # ancho en modo estudio
 
