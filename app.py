@@ -5,10 +5,12 @@ from typing import Dict, List
 import uuid, datetime, base64
 
 """
-Trading Tasks – v2.1.3 (bug fix + link en biblioteca)
-====================================================
-* **Arregla** excepción al volver al feed y elimina advertencia del widget `page` sincronizando el `radio` con `session_state.page` mediante `index` calculado.  
-* **Biblioteca**: ahora muestra un enlace "🔗 Abrir imagen" debajo de la miniatura principal.
+Trading Tasks – v2.1.4 (volver sin error)
+=========================================
+* **Fix definitivo**: botón "Volver al feed" ya no provoca excepción.  
+  - El botón ahora sólo borra `detail_id` y lanza `st.experimental_rerun()`.  
+  - Al inicio de `main()`, si `page == 'Detalle'` y `detail_id` está vacío, se cambia a "Feed" **antes** de crear el sidebar, evitando la colisión.
+* Enlace "🔗 Abrir imagen" sigue disponible en Biblioteca.
 """
 
 ROOT = Path(__file__).parent
@@ -114,15 +116,21 @@ def render_feed(posts):
 def render_detail(posts):
     post = next((x for x in posts if x["id"] == st.session_state.detail_id), None)
     if not post:
-        st.error("Post no encontrado")
-        return
+        st.error("Post no encontrado"); return
     if st.button("← Volver al feed"):
         st.session_state.detail_id = None
-        st.session_state.page = "Feed"
         st.experimental_rerun()
     st.header(post["title"])
     st.image(post["image"], width=660)
     st.write(post["notes"] or "—")
+
+    st.markdown("#### Comentarios")
+    for c in post["comments"]:
+        st.markdown(f"- *{c['author']}* ({c['ts']}): {c['text']}")
+    new_c = st.text_input("Nuevo comentario", key="comment_input")
+    if st.button("Publicar comentario") and new_c.strip():
+        post["comments"].append({"author":"you","text":new_c.strip(),"ts":datetime.datetime.utcnow().isoformat()}); save_posts(posts); st.experimental_rerun()
+(post["notes"] or "—")
 
     st.markdown("#### Comentarios")
     for c in post["comments"]:
