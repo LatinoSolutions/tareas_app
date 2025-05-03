@@ -109,7 +109,7 @@ def render_detail(posts):
     st.image(post["image"], width=660)
     st.write(post.get("notes", "—"))
 
-    st.markdown("#### Comentarios")(post["notes"] or "—")
+    st.markdown("#### Comentarios")
     st.markdown("#### Comentarios")
     for c in post["comments"]:
         st.markdown(f"- *{c['author']}* ({c['ts']}): {c['text']}")
