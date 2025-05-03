@@ -109,7 +109,10 @@ def render_detail(posts):
     st.image(post["image"], width=660)
     st.write(post.get("notes", "—"))
 
-    st.markdown("#### Comentarios")
+    # Mostrar categoría / etiquetas bajo el título
+    if post["tags"]:
+        st.markdown("*Etiquetas:* " + ", ".join(post["tags"]))
+
     st.markdown("#### Comentarios")
     for c in post["comments"]:
         st.markdown(f"- *{c['author']}* ({c['ts']}): {c['text']}")
