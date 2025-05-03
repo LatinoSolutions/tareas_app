@@ -3,10 +3,14 @@ import json, uuid, datetime, base64
 from pathlib import Path
 
 """
-Trading Tasks – v2.1.5 (indentación limpia)
-===========================================
-* Elimina líneas duplicadas e indentación inválida en `render_detail`.
-* Mantiene arreglo de retorno seguro y enlace en biblioteca.
+Trading Tasks – v2.2.0  
+=======================
+Cambios clave
+-------------
+1. **Menú simplificado** – se elimina la opción «Etiquetas».  
+2. **Edición en vista Detalle** – formulario dentro de un *expander* para modificar título, notas, etiquetas y estado (Revisada/No revisada/Comentario pendiente).  
+3. Filtro de etiquetas en la barra lateral sigue activo.  
+4. Vista Biblioteca mantiene enlace "🔗 Abrir imagen" y botón Compartir.
 """
 
 ROOT = Path(__file__).parent
@@ -16,10 +20,10 @@ DEFAULT_STATE_TAGS = ["Revisada", "No revisada", "Comentario pendiente"]
 
 # ---------- helpers -----------------
 
-def load_json(p, d):
-    return json.loads(p.read_text("utf-8")) if p.exists() else d
+def load_json(p: Path, default):
+    return json.loads(p.read_text("utf-8")) if p.exists() else default
 
-def save_json(p, obj):
+def save_json(p: Path, obj):
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), "utf-8")
 
 # ---------- session -----------------
@@ -58,7 +62,7 @@ def all_tags(posts, lib):
 
 def sidebar(posts, lib):
     st.sidebar.title("Menú")
-    opts = ["Feed", "Biblioteca", "Etiquetas", "Detalle"]
+    opts = ["Feed", "Biblioteca", "Detalle"]
     st.sidebar.radio("Vista", opts, index=opts.index(st.session_state.page), key="page")
     st.sidebar.markdown("### Filtro etiquetas")
     st.sidebar.multiselect("", all_tags(posts, lib), key="selected_tags")
@@ -98,8 +102,7 @@ def render_feed(posts):
 def render_detail(posts):
     post = next((x for x in posts if x["id"] == st.session_state.detail_id), None)
     if not post:
-        st.error("Post no encontrado")
-        return
+        st.error("Post no encontrado"); return
 
     if st.button("← Volver al feed"):
         st.session_state.detail_id = None
@@ -107,12 +110,31 @@ def render_detail(posts):
 
     st.header(post["title"])
     st.image(post["image"], width=660)
+
+    # Etiquetas visibles
+    st.markdown("*Etiquetas:* " + ", ".join(post["tags"]) if post["tags"] else "*Sin etiquetas*")
+
+    # ----- editar --------
+    with st.expander("✏️ Editar", expanded=False):
+        with st.form("edit_post"):
+            new_title = st.text_input("Título", value=post["title"])
+            new_notes = st.text_area("Notas", value=post.get("notes", ""))
+            tag_options = all_tags(posts, load_lib())
+            new_tags = st.multiselect("Etiquetas", tag_options, default=post["tags"])
+            # Estado único
+            current_state = next((t for t in post["tags"] if t in DEFAULT_STATE_TAGS), "No revisada")
+            new_state = st.radio("Estado", DEFAULT_STATE_TAGS, index=DEFAULT_STATE_TAGS.index(current_state))
+            saved = st.form_submit_button("Guardar cambios")
+            if saved:
+                post["title"] = new_title or post["title"]
+                post["notes"] = new_notes
+                # Actualizar etiquetas y estado único
+                other_tags = [t for t in new_tags if t not in DEFAULT_STATE_TAGS]
+                post["tags"] = other_tags + [new_state]
+                save_posts(posts)
+                st.success("Actualizado ✔️"); st.experimental_rerun()
+
     st.write(post.get("notes", "—"))
-
-    # Mostrar categoría / etiquetas bajo el título
-    if post["tags"]:
-        st.markdown("*Etiquetas:* " + ", ".join(post["tags"]))
-
     st.markdown("#### Comentarios")
     for c in post["comments"]:
         st.markdown(f"- *{c['author']}* ({c['ts']}): {c['text']}")
@@ -141,31 +163,12 @@ def share_to_feed(fn, tn, t, posts):
     posts.append(dict(id=str(uuid.uuid4()), created_at=datetime.datetime.utcnow().isoformat(), image=t["images"][0] if t["images"] else "", gallery=t["images"][1:], title=f"{fn}/{tn}", notes=t.get("comments", ""), tags=t.get("tags", []), comments=[], private=False))
     save_posts(posts); st.success("Compartido ✔️")
 
-# ---------- tag manager ------------
-
-def render_tags(posts, lib):
-    st.markdown("## Gestor de etiquetas")
-    tag = st.selectbox("Etiqueta", all_tags(posts, lib))
-    new = st.text_input("Renombrar", value=tag)
-    c1, c2 = st.columns(2)
-    if c1.button("Renombrar") and new.strip() and new != tag:
-        for p in posts: p["tags"] = [new if t == tag else t for t in p["tags"]]
-        for f in lib.values():
-            for t in f.values(): t["tags"] = [new if tg == tag else tg for tg in t.get("tags", [])]
-        save_posts(posts); save_lib(lib); st.experimental_rerun()
-    if c2.button("Eliminar"):
-        for p in posts: p["tags"] = [t for t in p["tags"] if t != tag]
-        for f in lib.values():
-            for t in f.values(): t["tags"] = [tg for tg in t.get("tags", []) if tg != tag]
-        save_posts(posts); save_lib(lib); st.experimental_rerun()
-
 # ---------- main -------------------
 
 def main():
     init_state()
     posts = load_posts()
     lib = load_lib()
-    # Si está en detalle sin id válido, vuelve al feed
     if st.session_state.page == "Detalle" and not st.session_state.detail_id:
         st.session_state.page = "Feed"
     sidebar(posts, lib)
@@ -174,8 +177,6 @@ def main():
         render_feed(posts)
     elif pg == "Biblioteca":
         render_library(lib, posts)
-    elif pg == "Etiquetas":
-        render_tags(posts, lib)
     elif pg == "Detalle":
         render_detail(posts)
 
